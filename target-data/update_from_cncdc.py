@@ -85,10 +85,10 @@ def build_weekly_series(rows: list[dict[str, str]], pathogen: str,
 
     return [
         {
-            "date": date,
-            "location": LOCATION,
+            "target_end_date": date,
             "target": target,
-            "value": f"{series[date]:g}",
+            "location": LOCATION,
+            "observation": f"{series[date]:g}",
         }
         for date in sorted(series.keys(), reverse=True)
     ]
@@ -107,10 +107,10 @@ def build_dengue_series(rows: list[dict[str, str]]) -> list[dict[str, str]]:
 
     return [
         {
-            "date": date,
-            "location": LOCATION,
+            "target_end_date": date,
             "target": TARGET_DENGUE,
-            "value": str(series[date]),
+            "location": LOCATION,
+            "observation": str(series[date]),
         }
         for date in sorted(series.keys(), reverse=True)
     ]
@@ -142,8 +142,8 @@ def month_starts(first: str, last: str) -> list[str]:
 def build_oracle(time_series: list[dict[str, str]], target: str,
                  monthly: bool) -> list[dict[str, str]]:
     rows = [row for row in time_series if row["target"] == target]
-    dates = sorted({row["date"] for row in rows})
-    values = {row["date"]: row["value"] for row in rows}
+    dates = sorted({row["target_end_date"] for row in rows})
+    values = {row["target_end_date"]: row["observation"] for row in rows}
     oracle_rows: list[dict[str, str]] = []
 
     for ref in dates:
@@ -344,7 +344,7 @@ def update_hub_target_data(args: argparse.Namespace) -> dict[str, object]:
     write_csv(
         TIME_SERIES_PATH,
         time_series,
-        ["date", "location", "target", "value"],
+        ["target_end_date", "target", "location", "observation"],
     )
     write_csv(
         ORACLE_PATH,
@@ -361,12 +361,13 @@ def update_hub_target_data(args: argparse.Namespace) -> dict[str, object]:
         ],
     )
     weekly_dates = sorted(
-        {row["date"] for row in covid_series + flu_series})
-    monthly_dates = sorted({row["date"] for row in dengue_series})
+        {row["target_end_date"] for row in covid_series + flu_series})
+    monthly_dates = sorted({row["target_end_date"] for row in dengue_series})
     tasks_changed = update_tasks_json(weekly_dates, monthly_dates)
 
     def span(series: list[dict[str, str]]) -> str:
-        return f"{series[-1]['date']} .. {series[0]['date']} ({len(series)} rows)"
+        return (f"{series[-1]['target_end_date']} .. "
+                f"{series[0]['target_end_date']} ({len(series)} rows)")
 
     return {
         "covid": span(covid_series),

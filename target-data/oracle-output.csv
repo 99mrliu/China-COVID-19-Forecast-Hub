@@ -1196,6 +1196,12 @@ reference_date,target,horizon,target_end_date,location,output_type,output_type_i
 2026-10-12,wk inc covid prop ili,-2,2026-09-28,CN,quantile,0.5,4.9
 2026-10-12,wk inc covid prop ili,-1,2026-10-05,CN,quantile,0.5,3.4
 2026-10-12,wk inc covid prop ili,0,2026-10-12,CN,quantile,0.5,2.9
+2026-10-19,wk inc covid prop ili,-5,2026-09-14,CN,quantile,0.5,9.3
+2026-10-19,wk inc covid prop ili,-4,2026-09-21,CN,quantile,0.5,7.2
+2026-10-19,wk inc covid prop ili,-3,2026-09-28,CN,quantile,0.5,4.9
+2026-10-19,wk inc covid prop ili,-2,2026-10-05,CN,quantile,0.5,3.4
+2026-10-19,wk inc covid prop ili,-1,2026-10-12,CN,quantile,0.5,2.9
+2026-10-19,wk inc covid prop ili,0,2026-10-19,CN,quantile,0.5,1.9
 2024-11-11,wk inc flu prop ili,0,2024-11-11,CN,quantile,0.5,3.7
 2024-11-18,wk inc flu prop ili,-1,2024-11-11,CN,quantile,0.5,3.7
 2024-11-18,wk inc flu prop ili,0,2024-11-18,CN,quantile,0.5,5.5
@@ -1787,6 +1793,12 @@ reference_date,target,horizon,target_end_date,location,output_type,output_type_i
 2026-10-12,wk inc flu prop ili,-2,2026-09-28,CN,quantile,0.5,11.6
 2026-10-12,wk inc flu prop ili,-1,2026-10-05,CN,quantile,0.5,13.6
 2026-10-12,wk inc flu prop ili,0,2026-10-12,CN,quantile,0.5,15.4
+2026-10-19,wk inc flu prop ili,-5,2026-09-14,CN,quantile,0.5,19
+2026-10-19,wk inc flu prop ili,-4,2026-09-21,CN,quantile,0.5,15.6
+2026-10-19,wk inc flu prop ili,-3,2026-09-28,CN,quantile,0.5,11.6
+2026-10-19,wk inc flu prop ili,-2,2026-10-05,CN,quantile,0.5,13.6
+2026-10-19,wk inc flu prop ili,-1,2026-10-12,CN,quantile,0.5,15.4
+2026-10-19,wk inc flu prop ili,0,2026-10-19,CN,quantile,0.5,14.7
 2024-01-01,mo inc dengue cases,0,2024-01-01,CN,quantile,0.5,27
 2024-02-01,mo inc dengue cases,-1,2024-01-01,CN,quantile,0.5,27
 2024-02-01,mo inc dengue cases,0,2024-02-01,CN,quantile,0.5,42
@@ -1964,3 +1976,9 @@ reference_date,target,horizon,target_end_date,location,output_type,output_type_i
 2026-08-01,mo inc dengue cases,-2,2026-06-01,CN,quantile,0.5,255
 2026-08-01,mo inc dengue cases,-1,2026-07-01,CN,quantile,0.5,1120
 2026-08-01,mo inc dengue cases,0,2026-08-01,CN,quantile,0.5,836
+2026-09-01,mo inc dengue cases,-5,2026-04-01,CN,quantile,0.5,137
+2026-09-01,mo inc dengue cases,-4,2026-05-01,CN,quantile,0.5,222
+2026-09-01,mo inc dengue cases,-3,2026-06-01,CN,quantile,0.5,255
+2026-09-01,mo inc dengue cases,-2,2026-07-01,CN,quantile,0.5,1120
+2026-09-01,mo inc dengue cases,-1,2026-08-01,CN,quantile,0.5,836
+2026-09-01,mo inc dengue cases,0,2026-09-01,CN,quantile,0.5,486
