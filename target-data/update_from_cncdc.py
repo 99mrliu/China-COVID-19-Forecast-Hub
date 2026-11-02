@@ -228,34 +228,24 @@ def make_quantile_output_type(value_type: str) -> dict[str, object]:
     }
 
 
-def make_dengue_round() -> dict[str, object]:
+def make_dengue_model_task() -> dict[str, object]:
+    """Dengue model_tasks entry (monthly cadence) for the shared round."""
     reference_dates = month_starts(DENGUE_FIRST_REFERENCE, DENGUE_LAST_REFERENCE)
     first_end = add_months(DENGUE_FIRST_REFERENCE, min(DENGUE_HORIZONS))
     last_end = add_months(DENGUE_LAST_REFERENCE, max(DENGUE_HORIZONS))
     return {
-        "round_id_from_variable": True,
-        "round_id": "reference_date",
-        "model_tasks": [
-            {
-                "task_ids": {
-                    "reference_date": {"required": None, "optional": reference_dates},
-                    "location": {"required": None, "optional": [LOCATION]},
-                    "horizon": {"required": None, "optional": DENGUE_HORIZONS},
-                    "target_end_date": {
-                        "required": None,
-                        "optional": month_starts(first_end, last_end),
-                    },
-                    "target": {"required": None, "optional": [TARGET_DENGUE]},
-                },
-                "output_type": make_quantile_output_type("integer"),
-                "target_metadata": [dengue_target_metadata()],
-            }
-        ],
-        "submissions_due": {
-            "relative_to": "reference_date",
-            "start": -360,
-            "end": 360,
+        "task_ids": {
+            "reference_date": {"required": None, "optional": reference_dates},
+            "location": {"required": None, "optional": [LOCATION]},
+            "horizon": {"required": None, "optional": DENGUE_HORIZONS},
+            "target_end_date": {
+                "required": None,
+                "optional": month_starts(first_end, last_end),
+            },
+            "target": {"required": None, "optional": [TARGET_DENGUE]},
         },
+        "output_type": make_quantile_output_type("integer"),
+        "target_metadata": [dengue_target_metadata()],
     }
 
 
@@ -289,18 +279,23 @@ def update_tasks_json(weekly_dates: list[str],
         weekly_task["target_metadata"].append(flu_target_metadata())
         changed = True
 
-    # Round 2 (monthly): dengue.
-    dengue_round = None
-    for rnd in rounds[1:]:
-        rnd_targets = rnd["model_tasks"][0]["task_ids"]["target"]["optional"]
-        if TARGET_DENGUE in rnd_targets:
-            dengue_round = rnd
-            break
-    if dengue_round is None:
-        dengue_round = make_dengue_round()
-        rounds.append(dengue_round)
+    # Single round holds all targets: dengue (monthly) is a separate
+    # model_tasks block inside round 0 so dashboard tools keyed to
+    # rounds_idx 0 (e.g. predtimechart) can see every target.
+    if len(rounds) > 1:
+        del rounds[1:]
         changed = True
-    if merge_dates(dengue_round["model_tasks"][0]["task_ids"], monthly_dates):
+    model_tasks = rounds[0]["model_tasks"]
+    dengue_task = None
+    for task in model_tasks:
+        if TARGET_DENGUE in (task["task_ids"]["target"]["optional"] or []):
+            dengue_task = task
+            break
+    if dengue_task is None:
+        dengue_task = make_dengue_model_task()
+        model_tasks.append(dengue_task)
+        changed = True
+    if merge_dates(dengue_task["task_ids"], monthly_dates):
         changed = True
 
     if changed:

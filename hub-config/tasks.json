@@ -641,18 +641,7 @@
                             "time_unit": "week"
                         }
                     ]
-                }
-            ],
-            "submissions_due": {
-                "relative_to": "reference_date",
-                "start": -360,
-                "end": 360
-            }
-        },
-        {
-            "round_id_from_variable": true,
-            "round_id": "reference_date",
-            "model_tasks": [
+                },
                 {
                     "task_ids": {
                         "reference_date": {
