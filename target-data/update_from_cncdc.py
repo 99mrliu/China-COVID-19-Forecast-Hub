@@ -298,6 +298,18 @@ def update_tasks_json(weekly_dates: list[str],
     if merge_dates(dengue_task["task_ids"], monthly_dates):
         changed = True
 
+    # hubAdmin's validate_round_ids_consistent requires the round_id variable
+    # task_id to be identical across model_tasks when round_id_from_variable
+    # is true, so keep the reference_date optional values unified.
+    union = sorted(
+        set(weekly_task["task_ids"]["reference_date"]["optional"])
+        | set(dengue_task["task_ids"]["reference_date"]["optional"])
+    )
+    for task in (weekly_task, dengue_task):
+        if task["task_ids"]["reference_date"]["optional"] != union:
+            task["task_ids"]["reference_date"]["optional"] = union
+            changed = True
+
     if changed:
         TASKS_PATH.write_text(
             json.dumps(tasks, indent=4, ensure_ascii=False) + "\n",
