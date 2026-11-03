@@ -49,7 +49,7 @@ jobs:
           fi
 
       - name: Commit if changed
-        uses: stefanzweifel/git-auto-commit-action@v6
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore(ensemble): rebuild CNCovidHub-ensemble"
           file_pattern: model-output/CNCovidHub-ensemble/*.csv
