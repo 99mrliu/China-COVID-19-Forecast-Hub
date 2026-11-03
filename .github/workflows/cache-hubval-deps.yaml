@@ -1,0 +1,39 @@
+name: Build dependency cache on main branch
+
+# Keeps a warm cache of the R packages used by PR validation, so submission
+# checks do not reinstall them from scratch on every pull request. Part of the
+# official hubverse-actions setup:
+#
+#   https://github.com/hubverse-org/hubverse-actions/tree/main/cache-hubval-deps
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/cache-hubval-deps.yaml'
+  schedule:
+    - cron: "10 0 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  build-deps-cache-on-main:
+    if: github.event.repository.fork != true
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+          extra-repositories: 'https://hubverse-org.r-universe.dev'
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::hubValidations
+            any::sessioninfo

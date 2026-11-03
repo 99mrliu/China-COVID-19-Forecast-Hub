@@ -1,0 +1,28 @@
+name: Hub Config Validation (R)
+
+# Validates the hub's config files when a pull request changes them and posts
+# the result on that pull request. Official hubverse-actions setup:
+#
+#   https://github.com/hubverse-org/hubverse-actions/tree/main/validate-config
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: main
+    paths:
+      - 'hub-config/**'
+      - '!**README**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate-hub-config:
+    # A fork's own copy of the hub does not need validating.
+    if: github.event.repository.fork != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hubverse-org/hubverse-actions/validate-config@v2
