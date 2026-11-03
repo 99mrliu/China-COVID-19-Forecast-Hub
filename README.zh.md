@@ -10,20 +10,22 @@
 
 **在线 Dashboard：** [dailypartita.github.io/China-Infectious-Disease-Forecast-Dashboard](https://dailypartita.github.io/China-Infectious-Disease-Forecast-Dashboard/)
 
-**目标数据：** [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard) · **已观测覆盖：** 新冠周度 2022-12-05 – 2026-10-12 · 流感周度 2024-11-11 – 2026-10-12 · 登革热月度 2024-01 – 2026-08 · **已配置提交轮次：** 周一至 2027-10-25
+**目标数据：** [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard) · **已观测覆盖：** 见 `target-data/time-series.csv`（由定时同步每周更新）· **已配置提交轮次：** 周度（周一）至 2027-10-25；登革热月度至 2027-10-01
 
 ## 平台功能
 
 ### 预测目标
 
-**轮次 1 — 周度呼吸道目标**
+所有目标共享同一个动态轮次（round ID = `reference_date`），其下定义两个建模任务：
+
+**周度呼吸道目标**
 
 - **指标：** `wk inc covid prop ili`、`wk inc flu prop ili` — 门急诊 ILI 病例中 SARS-CoV-2 / 流感病毒周度阳性率
 - **地区：** `CN`（全国）
-- **输出：** 23 分位数概率预测（horizon -1 至 6；可提交其中任意子集。建议补齐 -1..6 以便可比，但校验并不要求全部 horizon）
+- **输出：** 23 分位数概率预测（horizon -1 至 6 周，reference_date 为周一；可提交其中任意子集。建议补齐全部 horizon 以便可比，但校验并不要求全部）
 - **单位：** 百分点（如 `13.5` 表示 13.5%），非比例值
 
-**轮次 2 — 登革热月度目标**
+**登革热月度目标**
 
 - **指标：** `mo inc dengue cases` — 法定传染病报告的登革热月度病例数
 - **地区：** `CN`（全国）
@@ -44,7 +46,7 @@
 
 | 团队 | 模型 |
 |------|------|
-| GZNL | NextWave（新冠阳性率周期演变 / 下一波情景预测） |
+| GZNL | NextWave（新冠阳性率周期演变 / 下一波情景预测）、VincentAvg |
 | XMU_CTModelling | FNN, LSTM, XGBoost, GRU, TCN |
 | MUST | SEIRS |
 
@@ -90,12 +92,15 @@ China-Infectious-Disease-Forecast-Hub/
 
 - [`hub-config/admin.json`](hub-config/admin.json) — Hub 基本设置
 - [`hub-config/tasks.json`](hub-config/tasks.json) — 建模任务与分位数要求
+- [`hub-config/target-data.json`](hub-config/target-data.json) — 目标数据标准配置
 - [`hub-config/model-metadata-schema.json`](hub-config/model-metadata-schema.json) — 元数据 schema
 
 ### 自动化工作流
 
-- **Hub Submission Validation (R)**（`validate-submission.yaml`）— 合并前校验预测 PR
-- **Sync target data from cn_cdc_dashboard**（`sync-target-data.yaml`）— 定时/手动从 cn_cdc_dashboard 刷新 `target-data/` 与 `tasks.json` 日期；无变更不提交
+- **Hub Submission Validation (R)**（`validate-submission.yaml`）— 使用官方 [hubverse-actions](https://github.com/hubverse-org/hubverse-actions) 校验预测与元数据 PR，结果由 `validate-submission-comment.yaml` 回帖到 PR
+- **Hub Config Validation (R)**（`validate-config.yaml`）— 按 hubverse schema 校验 `hub-config/` 变更
+- **Hub Target Data Validation (R)**（`validate-target-data.yaml`）— 校验 PR 中的 `target-data/` 变更
+- **Sync target data from cn_cdc_dashboard**（`sync-target-data.yaml`）— 定时/手动从 cn_cdc_dashboard 刷新 `target-data/` 与 `tasks.json` 日期；提交前先过结构化校验门槛，无变更不提交
 
 ## 参与贡献
 

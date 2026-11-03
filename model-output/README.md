@@ -57,8 +57,10 @@ Each forecast file must follow this naming pattern:
 ```
 
 Where:
-- `reference_date` is in `YYYY-MM-DD` format — the **Monday** starting the surveillance week of the submission
+- `reference_date` is in `YYYY-MM-DD` format — the **Monday** starting the surveillance week (weekly targets) or the **first day of the month** (monthly dengue target)
 - `team_abbr` and `model_abbr` must match the subdirectory name
+
+One file covers one reference date and may contain rows for every target that shares it (e.g. both weekly respiratory targets, or — when a month starts on a Monday — weekly and monthly targets together).
 
 **Examples:**
 - `2026-08-31-GZNL-NextWave.csv`
@@ -73,10 +75,10 @@ Files must be comma-separated values (CSV), encoded as **UTF-8 without a byte or
 
 | # | Column | Type | Description |
 |---|--------|------|-------------|
-| 1 | `reference_date` | Date (`YYYY-MM-DD`) | Monday starting the surveillance week; must match the date in the file name |
+| 1 | `reference_date` | Date (`YYYY-MM-DD`) | Monday starting the surveillance week (weekly targets) or first day of the month (dengue); must match the date in the file name |
 | 2 | `target` | String | Forecast target identifier |
-| 3 | `horizon` | Integer | Number of weeks between `reference_date` and `target_end_date` |
-| 4 | `target_end_date` | Date (`YYYY-MM-DD`) | Monday starting the target surveillance week |
+| 3 | `horizon` | Integer | Number of weeks (weekly targets) or months (dengue) between `reference_date` and `target_end_date` |
+| 4 | `target_end_date` | Date (`YYYY-MM-DD`) | Monday starting the target surveillance week (weekly targets) or first day of the target month (dengue) |
 | 5 | `location` | String | Geographic identifier |
 | 6 | `output_type` | String | Type of model output representation |
 | 7 | `output_type_id` | Numeric | Identifier for the output type (e.g., quantile level) |
@@ -86,23 +88,28 @@ Files must be comma-separated values (CSV), encoded as **UTF-8 without a byte or
 
 ### `reference_date`
 
-The date from which all forecasts in the file are referenced. This is the **Monday** at the start of the surveillance week (Monday–Sunday, ISO week) containing the submission deadline. The `reference_date` must match the date in the file name.
+The date from which all forecasts in the file are referenced. The `reference_date` must match the date in the file name.
 
-This follows the China CDC sentinel surveillance convention, where each weekly observation is keyed by the Monday that starts the week (e.g. ISO week 35 of 2026 is keyed `2026-08-24` and covers 2026-08-24 through 2026-08-30).
+- **Weekly targets** (`wk inc covid prop ili`, `wk inc flu prop ili`): the **Monday** at the start of the surveillance week (Monday–Sunday, ISO week) containing the submission deadline. This follows the China CDC sentinel surveillance convention, where each weekly observation is keyed by the Monday that starts the week (e.g. ISO week 35 of 2026 is keyed `2026-08-24` and covers 2026-08-24 through 2026-08-30).
+- **Monthly target** (`mo inc dengue cases`): the **first day of the month** the forecast is made in (e.g. `2026-11-01`).
 
 Format: `YYYY-MM-DD`
 
 ### `target`
 
-The forecast target. Currently, the only accepted value is:
+The forecast target. Accepted values:
 
-| Value | Description |
-|-------|-------------|
-| `wk inc covid prop ili` | Weekly SARS-CoV-2 positivity rate among ILI cases from sentinel hospital surveillance |
+| Value | Cadence | Description |
+|-------|---------|-------------|
+| `wk inc covid prop ili` | Weekly | SARS-CoV-2 positivity rate among ILI cases from sentinel hospital surveillance |
+| `wk inc flu prop ili` | Weekly | Influenza virus positivity rate among ILI cases from sentinel hospital surveillance |
+| `mo inc dengue cases` | Monthly | Reported dengue cases from national notifiable disease surveillance |
 
 ### `horizon`
 
-The number of **weeks** between the `reference_date` and the `target_end_date`. Valid values are integers from **-1 to 6**:
+The offset between the `reference_date` and the `target_end_date`, in the target's own time unit.
+
+**Weekly targets** — the number of **weeks**, integers from **-1 to 6**:
 
 | Horizon | Meaning |
 |---------|---------|
@@ -113,19 +120,28 @@ The number of **weeks** between the `reference_date` and the `target_end_date`. 
 | ... | ... |
 | 6 | 6-week-ahead forecast |
 
-Teams may submit any subset of these horizons. Submitting the full -1 through 6 range is recommended for comparability, but not all horizons are required for validation.
+**Monthly target** (`mo inc dengue cases`) — the number of **months**, integers from **-1 to 3**:
+
+| Horizon | Meaning |
+|---------|---------|
+| -1 | Nowcast: the month before the reference month |
+| 0 | Nowcast: the reference month itself |
+| 1 | 1-month-ahead forecast |
+| 2 | 2-month-ahead forecast |
+| 3 | 3-month-ahead forecast |
+
+Teams may submit any subset of these horizons. Submitting the full range is recommended for comparability, but not all horizons are required for validation.
 
 ### `target_end_date`
 
-The **Monday** starting the surveillance week being forecast. Must satisfy:
+The start of the time interval being forecast. Must satisfy:
 
-```
-target_end_date = reference_date + horizon × 7 days
-```
+- **Weekly targets**: `target_end_date = reference_date + horizon × 7 days` — the **Monday** starting the target surveillance week.
+- **Monthly target**: `target_end_date = reference_date + horizon months` — the **first day** of the target month.
 
 Format: `YYYY-MM-DD`
 
-> Despite the name (inherited from the hubverse standard), this column holds the **start** of the target week, matching the `reference_date` convention above.
+> Despite the name (inherited from the hubverse standard), this column holds the **start** of the target week/month, matching the `reference_date` convention above.
 
 Standard packages can convert between dates and ISO weeks:
 - **R**: [lubridate](https://lubridate.tidyverse.org/reference/week.html) (`isoweek()`, `floor_date(x, "week", week_start = 1)`)
@@ -157,14 +173,16 @@ See [Quantile Levels](#quantile-levels) for the full list of required values.
 
 ### `value`
 
-The forecast value — a **non-negative number** representing the predicted SARS-CoV-2 positivity rate.
+The forecast value — always a **non-negative number**, with units that depend on the target:
 
-**Important**: Values are in **percentage points** (0–100 scale), **not** proportions (0–1).
+- **Weekly positivity targets** (`wk inc covid prop ili`, `wk inc flu prop ili`): **percentage points** (0–100 scale), **not** proportions (0–1).
 
-| Value | Interpretation |
-|-------|---------------|
-| `13.5` | 13.5% positivity rate |
-| `2.3` | 2.3% positivity rate |
+  | Value | Interpretation |
+  |-------|---------------|
+  | `13.5` | 13.5% positivity rate |
+  | `2.3` | 2.3% positivity rate |
+
+- **Monthly dengue target** (`mo inc dengue cases`): **case counts** — non-negative **integers** (no decimals).
 
 ## Quantile Levels
 
@@ -236,9 +254,22 @@ reference_date,target,horizon,target_end_date,location,output_type,output_type_i
 
 **Key points:**
 - Each horizon requires all 23 quantile levels
-- With all 8 horizons (-1 through 6): 8 × 23 = **184 rows** per submission
-- All `value` entries are in percentage points (e.g., `2.6` = 2.6%)
-- `target_end_date` must equal `reference_date + horizon × 7`
+- A full weekly submission with all 8 horizons (-1 through 6) has 8 × 23 = **184 rows** per target
+- Positivity `value` entries are in percentage points (e.g., `2.6` = 2.6%)
+- `target_end_date` must equal `reference_date + horizon × 7` (weekly targets)
+
+A monthly dengue submission looks the same, with monthly dates and integer case counts (reference date 2026-11-01, horizons -1 through 3, truncated):
+
+```csv
+reference_date,target,horizon,target_end_date,location,output_type,output_type_id,value
+2026-11-01,mo inc dengue cases,-1,2026-10-01,CN,quantile,0.01,120
+2026-11-01,mo inc dengue cases,-1,2026-10-01,CN,quantile,0.5,210
+2026-11-01,mo inc dengue cases,-1,2026-10-01,CN,quantile,0.99,480
+2026-11-01,mo inc dengue cases,0,2026-11-01,CN,quantile,0.01,80
+...
+```
+
+A full monthly submission with all 4 horizons has 4 × 23 = **92 rows**.
 
 ## Hub Ensemble
 
@@ -325,8 +356,8 @@ If everything is correct, you should see output like:
 | `reference_date` column reported as missing | File was saved with a UTF-8 BOM, so the first header reads `\ufeffreference_date` | Re-save as UTF-8 without BOM |
 | CSV date parse / `CSV conversion error to date32` / invalid value like `2026/8/31` | Dates written with slashes or Excel locale formats (`2026/8/31`, `8/31/2026`) instead of ISO | Use strict `YYYY-MM-DD` for both `reference_date` and `target_end_date` (and the date in the filename) |
 | unexpected extra columns / `file_read` or schema issues from trailing commas | Empty trailing columns or blank rows (common when exporting from spreadsheets) | Use exactly the 8 required columns; no trailing empty columns or blank data rows |
-| `[round_id_valid]` fails | The `reference_date` is not a Monday, or that round is not yet open | Use the Monday starting the surveillance week; rounds open as target data becomes available |
-| `[valid_vals]` fails | Negative values, or positivity submitted as a proportion (0–1) instead of percentage points | Use non-negative values on the 0–100 scale |
+| `[round_id_valid]` fails | The `reference_date` is not a Monday (weekly targets) or a first-of-month (dengue), or that round is not yet open | Use the Monday starting the surveillance week, or the first day of the month for dengue; rounds open as target data becomes available |
+| `[valid_vals]` fails | Negative values, positivity submitted as a proportion (0–1) instead of percentage points, or non-integer dengue case counts | Use non-negative values on the 0–100 scale for positivity targets and non-negative integers for dengue |
 
 ## Weekly Schedule
 

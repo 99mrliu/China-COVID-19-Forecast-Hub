@@ -8,6 +8,7 @@ This directory contains the configuration files for the **China Infectious Disea
 |------|-------------|
 | [`admin.json`](admin.json) | Administrative settings for the hub (name, maintainer, repository, accepted file formats, timezone) |
 | [`tasks.json`](tasks.json) | Modeling task definitions including task IDs, output types, target metadata, and submission windows |
+| [`target-data.json`](target-data.json) | Target data configuration for the v6 time-series / oracle-output standard |
 | [`model-metadata-schema.json`](model-metadata-schema.json) | JSON Schema defining the required and optional fields for model metadata YAML files |
 
 ## `admin.json`
@@ -24,14 +25,23 @@ Defines global hub settings that should remain stable throughout the hub's opera
 
 Defines the modeling tasks, including:
 
-- **Round ID**: Derived from `reference_date` (dynamic rounds)
+- **Round ID**: Derived from `reference_date` (a single dynamic round shared by all targets)
 - **Task IDs**: `reference_date`, `location`, `horizon`, `target_end_date`, `target`
 - **Output types**:
   - `quantile` — 23 required quantile levels from 0.01 to 0.99
   - `sample` — 200 samples per task (optional)
-- **Targets**: round 1 (weekly) — `wk inc covid prop ili`, `wk inc flu prop ili` (SARS-CoV-2 / influenza positivity rates among ILI cases); round 2 (monthly) — `mo inc dengue cases` (reported dengue cases)
-- **Horizons**: -1 to 6 weeks (round 1) or -1 to 3 months (round 2) relative to the reference date
+- **Modeling tasks**: two task blocks within the shared round —
+  - weekly — `wk inc covid prop ili`, `wk inc flu prop ili` (SARS-CoV-2 / influenza positivity rates among ILI cases), horizons -1 to 6 weeks, reference dates on Mondays
+  - monthly — `mo inc dengue cases` (reported dengue cases), horizons -1 to 3 months, reference dates on the 1st of each month
 - **Submission window**: Broad window (±360 days relative to reference date)
+
+## `target-data.json`
+
+Configures the [v6 target data standard](https://hubverse.io/en/latest/user-guide/target-data.html) used by `target-data/time-series.csv` and `target-data/oracle-output.csv`:
+
+- **Observable unit**: `target_end_date`, `target`, `location`
+- **Date column**: `target_end_date`
+- **Oracle output**: carries output type IDs (median quantile `0.5`)
 
 For a detailed explanation of each task ID and output type, see [model-output/README.md](../model-output/README.md).
 
