@@ -10,20 +10,22 @@ Collaborative forecasting hub built on the [Hubverse](https://hubverse.io/) fram
 
 **Dashboard:** [dailypartita.github.io/China-Infectious-Disease-Forecast-Dashboard](https://dailypartita.github.io/China-Infectious-Disease-Forecast-Dashboard/)
 
-**Target data:** [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard) · **Observed coverage:** COVID-19 weekly 2022-12-05 – 2026-10-12 · Flu weekly 2024-11-11 – 2026-10-12 · Dengue monthly 2024-01 – 2026-08 · **Configured submission rounds:** Mondays through 2027-10-25
+**Target data:** [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard) · **Observed coverage:** see `target-data/time-series.csv` (updated weekly by automated sync) · **Configured submission rounds:** weekly (Mondays) through 2027-10-25; monthly dengue through 2027-10-01
 
 ## Features
 
 ### Forecast Targets
 
-**Round 1 — weekly respiratory targets**
+All targets share a single dynamic round (round ID = `reference_date`) and are defined as two modeling tasks within it:
+
+**Weekly respiratory targets**
 
 - **Targets:** `wk inc covid prop ili`, `wk inc flu prop ili` — weekly SARS-CoV-2 / influenza virus positivity rates among ILI cases
 - **Location:** `CN` (national)
-- **Output:** 23-quantile probabilistic forecasts (horizons -1 to 6; teams may submit any subset — full -1..6 is recommended for comparability, but not all are required for validation)
+- **Output:** 23-quantile probabilistic forecasts (horizons -1 to 6 weeks, reference dates on Mondays; teams may submit any subset — the full range is recommended for comparability, but not all horizons are required for validation)
 - **Units:** Percentage points (e.g., `13.5` = 13.5%), not proportions
 
-**Round 2 — monthly dengue target**
+**Monthly dengue target**
 
 - **Target:** `mo inc dengue cases` — monthly reported dengue cases from notifiable disease surveillance
 - **Location:** `CN` (national)
@@ -44,7 +46,7 @@ All pull requests are validated automatically via [GitHub Actions](.github/workf
 
 | Team | Models |
 |------|--------|
-| GZNL | NextWave |
+| GZNL | NextWave, VincentAvg |
 | XMU_CTModelling | FNN, LSTM, XGBoost, GRU, TCN |
 | MUST | SEIRS |
 
@@ -90,12 +92,15 @@ China-Infectious-Disease-Forecast-Hub/
 
 - [`hub-config/admin.json`](hub-config/admin.json) — hub settings
 - [`hub-config/tasks.json`](hub-config/tasks.json) — modeling tasks and quantile requirements
+- [`hub-config/target-data.json`](hub-config/target-data.json) — target data standard settings
 - [`hub-config/model-metadata-schema.json`](hub-config/model-metadata-schema.json) — metadata schema
 
 ### Workflows
 
-- **Hub Submission Validation (R)** (`validate-submission.yaml`) — validate forecast PRs on merge
-- **Sync target data from cn_cdc_dashboard** (`sync-target-data.yaml`) — scheduled/manual refresh of `target-data/` and `tasks.json` dates; commits only when something changes
+- **Hub Submission Validation (R)** (`validate-submission.yaml`) — validates forecast and metadata PRs via the official [hubverse-actions](https://github.com/hubverse-org/hubverse-actions); `validate-submission-comment.yaml` posts the result back on the PR
+- **Hub Config Validation (R)** (`validate-config.yaml`) — validates `hub-config/` changes against the hubverse schema
+- **Hub Target Data Validation (R)** (`validate-target-data.yaml`) — validates `target-data/` changes in pull requests
+- **Sync target data from cn_cdc_dashboard** (`sync-target-data.yaml`) — scheduled/manual refresh of `target-data/` and `tasks.json` dates; runs a structural validation gate before committing, and commits only when something changes
 
 ## Contributing
 

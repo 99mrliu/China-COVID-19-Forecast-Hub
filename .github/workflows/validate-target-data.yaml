@@ -1,0 +1,37 @@
+name: Hub Target Data Validation (R)
+
+# Validates the target data files a pull request adds or changes and posts the
+# result on that pull request. Official hubverse-actions setup:
+#
+#   https://github.com/hubverse-org/hubverse-actions/tree/main/validate-target-data
+#
+# The automated sync workflow pushes target-data updates straight to main; it
+# runs its own structural gate before committing (see sync-target-data.yaml).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: main
+    paths:
+      - 'target-data/time-series.*'
+      - 'target-data/time-series/**'
+      - 'target-data/oracle-output.*'
+      - 'target-data/oracle-output/**'
+      - '!**/README'
+      - '!**/README.*'
+      - '!**/readme'
+      - '!**/readme.*'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate-target-data:
+    # A fork's own copy of the hub does not need validating.
+    if: github.event.repository.fork != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hubverse-org/hubverse-actions/validate-target-data@v2

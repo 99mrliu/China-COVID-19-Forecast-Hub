@@ -29,6 +29,70 @@ jobs:
       - name: Update target data from cn_cdc_dashboard
         run: python3 target-data/update_from_cncdc.py --from-github
 
+      # Structural gate before committing straight to main: this push bypasses
+      # the PR-based validate-target-data workflow, so refuse to commit files
+      # that no longer match the hubverse v6 target data standard (e.g. after
+      # an upstream format change in cn_cdc_dashboard).
+      - name: Validate regenerated files
+        run: |
+          pip install --quiet jsonschema
+          python3 - <<'EOF'
+          import csv, json, sys, urllib.request
+          from datetime import date
+
+          import jsonschema
+
+          schema_url = ("https://raw.githubusercontent.com/hubverse-org/"
+                        "schemas/main/v6.0.0/tasks-schema.json")
+          with urllib.request.urlopen(schema_url, timeout=60) as r:
+              schema = json.load(r)
+          tasks = json.load(open("hub-config/tasks.json", encoding="utf-8"))
+          errors = list(jsonschema.Draft202012Validator(schema).iter_errors(tasks))
+          for e in errors[:5]:
+              print(f"tasks.json schema error at {e.json_path}: {e.message}")
+          if errors:
+              sys.exit("tasks.json does not validate against hubverse v6 schema")
+
+          def is_date(s):
+              try:
+                  date.fromisoformat(s)
+                  return True
+              except ValueError:
+                  return False
+
+          with open("target-data/time-series.csv", newline="", encoding="utf-8") as f:
+              rows = list(csv.reader(f))
+          header, ts_data = rows[0], rows[1:]
+          assert header == ["target_end_date", "target", "location", "observation"], \
+              f"time-series.csv header changed: {header}"
+          assert ts_data, "time-series.csv has no data rows"
+          targets = set()
+          for row in ts_data:
+              assert len(row) == 4, f"bad time-series row: {row}"
+              assert is_date(row[0]), f"bad date in time-series: {row}"
+              float(row[3])
+              targets.add(row[1])
+          assert targets == {"wk inc covid prop ili", "wk inc flu prop ili",
+                             "mo inc dengue cases"}, f"unexpected targets: {targets}"
+
+          with open("target-data/oracle-output.csv", newline="", encoding="utf-8") as f:
+              rows = list(csv.reader(f))
+          header, oracle_data = rows[0], rows[1:]
+          assert header == ["reference_date", "target", "horizon", "target_end_date",
+                            "location", "output_type", "output_type_id", "oracle_value"], \
+              f"oracle-output.csv header changed: {header}"
+          assert oracle_data, "oracle-output.csv has no data rows"
+          for row in oracle_data:
+              assert len(row) == 8, f"bad oracle row: {row}"
+              assert is_date(row[0]) and is_date(row[3]), f"bad date in oracle: {row}"
+              int(row[2])
+              float(row[7])
+
+          print(f"OK: time-series.csv ({len(ts_data)} rows), "
+                f"oracle-output.csv ({len(oracle_data)} rows), "
+                f"tasks.json valid against hubverse v6 schema")
+          EOF
+
       - name: Commit if changed
         uses: stefanzweifel/git-auto-commit-action@v6
         with:
