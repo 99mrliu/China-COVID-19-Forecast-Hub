@@ -1,4 +1,5 @@
 target_end_date,target,location,observation
+2026-10-26,wk inc covid prop ili,CN,1.3
 2026-10-19,wk inc covid prop ili,CN,1.9
 2026-10-12,wk inc covid prop ili,CN,2.9
 2026-10-05,wk inc covid prop ili,CN,3.4
@@ -202,6 +203,7 @@ target_end_date,target,location,observation
 2022-12-19,wk inc covid prop ili,CN,59.5
 2022-12-12,wk inc covid prop ili,CN,33.2
 2022-12-05,wk inc covid prop ili,CN,9.7
+2026-10-26,wk inc flu prop ili,CN,15.6
 2026-10-19,wk inc flu prop ili,CN,14.7
 2026-10-12,wk inc flu prop ili,CN,15.4
 2026-10-05,wk inc flu prop ili,CN,13.6
