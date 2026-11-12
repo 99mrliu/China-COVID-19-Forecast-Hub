@@ -8,6 +8,13 @@
   "versioned": false,
   "date_col": "target_end_date",
   "oracle-output": {
-    "has_output_type_ids": true
+    "has_output_type_ids": true,
+    "observable_unit": [
+      "reference_date",
+      "target",
+      "horizon",
+      "target_end_date",
+      "location"
+    ]
   }
 }

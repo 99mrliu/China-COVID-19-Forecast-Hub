@@ -31,17 +31,17 @@ Defines the modeling tasks, including:
   - `quantile` — 23 required quantile levels from 0.01 to 0.99
   - `sample` — 200 samples per task (optional)
 - **Modeling tasks**: two task blocks within the shared round —
-  - weekly — `wk inc covid prop ili`, `wk inc flu prop ili` (SARS-CoV-2 / influenza positivity rates among ILI cases), horizons -1 to 6 weeks, reference dates on Mondays
-  - monthly — `mo inc dengue cases` (reported dengue cases), horizons -1 to 3 months, reference dates on the 1st of each month
+  - weekly — `wk inc covid prop ili` (SARS-CoV-2 positivity among outpatient ILI cases, China CDC sentinel surveillance) and `wk inc flu prop ili` (CNIC national laboratory positivity of ILI specimens; [weekly influenza surveillance report](https://ivdc.chinacdc.cn/cnic/zyzx/lgzb/)), horizons -5 to 6 weeks, reference dates on Mondays from 2009-09-07
+  - monthly — `mo inc dengue cases` (reported dengue cases), horizons -5 to 3 months, reference dates on the 1st of each month from 2024-01-01 (the shared round list also contains the weekly Mondays)
 - **Submission window**: Broad window (±360 days relative to reference date)
 
 ## `target-data.json`
 
 Configures the [v6 target data standard](https://hubverse.io/en/latest/user-guide/target-data.html) used by `target-data/time-series.csv` and `target-data/oracle-output.csv`:
 
-- **Observable unit**: `target_end_date`, `target`, `location`
+- **Time-series observable unit**: `target_end_date`, `target`, `location`
 - **Date column**: `target_end_date`
-- **Oracle output**: carries output type IDs (median quantile `0.5`)
+- **Oracle output**: same dates plus `reference_date` and `horizon`. Quantile rows leave `output_type_id` blank; `oracle_value` is the observed value. Horizons run from -5 through 0 (five observed steps of lookback, then the reference step).
 
 For a detailed explanation of each task ID and output type, see [model-output/README.md](../model-output/README.md).
 

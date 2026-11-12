@@ -90,7 +90,7 @@ Files must be comma-separated values (CSV), encoded as **UTF-8 without a byte or
 
 The date from which all forecasts in the file are referenced. The `reference_date` must match the date in the file name.
 
-- **Weekly targets** (`wk inc covid prop ili`, `wk inc flu prop ili`): the **Monday** at the start of the surveillance week (Monday–Sunday, ISO week) containing the submission deadline. This follows the China CDC sentinel surveillance convention, where each weekly observation is keyed by the Monday that starts the week (e.g. ISO week 35 of 2026 is keyed `2026-08-24` and covers 2026-08-24 through 2026-08-30).
+- **Weekly targets** (`wk inc covid prop ili`, `wk inc flu prop ili`): the **Monday** at the start of the surveillance week (Monday–Sunday, ISO week) containing the submission deadline. COVID follows the China CDC sentinel surveillance convention. Influenza uses the same Monday key, which is the CNIC weekly file's `reference_date` (that file's `target_end_date` is the Sunday and is not the Hub date). Example: ISO week 35 of 2026 is keyed `2026-08-24` and covers 2026-08-24 through 2026-08-30.
 - **Monthly target** (`mo inc dengue cases`): the **first day of the month** the forecast is made in (e.g. `2026-11-01`).
 
 Format: `YYYY-MM-DD`
@@ -102,14 +102,14 @@ The forecast target. Accepted values:
 | Value | Cadence | Description |
 |-------|---------|-------------|
 | `wk inc covid prop ili` | Weekly | SARS-CoV-2 positivity rate among ILI cases from sentinel hospital surveillance |
-| `wk inc flu prop ili` | Weekly | Influenza virus positivity rate among ILI cases from sentinel hospital surveillance |
+| `wk inc flu prop ili` | Weekly | CNIC national laboratory positivity of ILI specimens in the national influenza surveillance network (percentage points). Source: [CNIC weekly influenza surveillance report](https://ivdc.chinacdc.cn/cnic/zyzx/lgzb/) |
 | `mo inc dengue cases` | Monthly | Reported dengue cases from national notifiable disease surveillance |
 
 ### `horizon`
 
 The offset between the `reference_date` and the `target_end_date`, in the target's own time unit.
 
-**Weekly targets** — the number of **weeks**, integers from **-1 to 6**:
+**Weekly targets** — the number of **weeks**, integers from **-5 to 6**. Horizons **-1 to 6** are the forecast range. Horizons **-5 to -2** match the oracle lookback and may be submitted, but they are not required.
 
 | Horizon | Meaning |
 |---------|---------|
@@ -120,7 +120,7 @@ The offset between the `reference_date` and the `target_end_date`, in the target
 | ... | ... |
 | 6 | 6-week-ahead forecast |
 
-**Monthly target** (`mo inc dengue cases`) — the number of **months**, integers from **-1 to 3**:
+**Monthly target** (`mo inc dengue cases`) — the number of **months**, integers from **-5 to 3**. Horizons **-1 to 3** are the forecast range. Horizons **-5 to -2** match the oracle lookback.
 
 | Horizon | Meaning |
 |---------|---------|

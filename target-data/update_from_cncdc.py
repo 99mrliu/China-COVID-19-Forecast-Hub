@@ -3,8 +3,22 @@
 
 Targets:
 - wk inc covid prop ili  (weekly, from cncdc_surveillance_covid19.csv)
-- wk inc flu prop ili    (weekly, from cncdc_surveillance_all.csv)
+- wk inc flu prop ili    (weekly, from cnic_influenza_weekly.csv)
 - mo inc dengue cases    (monthly, from notifiable_all.csv)
+
+Influenza observations are the China National Influenza Center (CNIC)
+weekly report's national laboratory positivity of ILI specimens
+(column ``positivity_national``), not ILI% and not the China CDC
+multi-pathogen sentinel bulletin's 「流感病毒」 nucleic-acid positivity.
+Official reports: https://ivdc.chinacdc.cn/cnic/zyzx/lgzb/
+
+The CNIC file keys each ISO week by Monday ``reference_date`` and Sunday
+``target_end_date``. This hub keeps the Monday (``reference_date``) as
+both the round id and ``target_end_date`` so already submitted forecasts
+stay aligned. Every Monday from 2009-09-07 through the current end of
+the round list is a valid round. Weeks with no national positivity value
+are omitted; they are not interpolated. Oracle lookback stops at horizon
+-5 when a gap would otherwise stretch further.
 
 Dengue history before the official China CDC crawl (2004-01 through the
 month before official coverage) is kept by merging
@@ -12,8 +26,8 @@ data/backfill/notifiable-flu-dengue.csv the same way
 cn_cdc_dashboard scripts/sync-notifiable.mjs does: an existing
 (month, disease) row wins, and the backfill only fills gaps. That
 extract also contains monthly notifiable influenza case counts. Those
-are not `wk inc flu prop ili` (weekly sentinel ILI positivity) and are
-not imported, and this hub has no monthly flu target.
+are not `wk inc flu prop ili` (CNIC national ILI-specimen positivity)
+and are not imported, and this hub has no monthly flu target.
 """
 
 from __future__ import annotations
@@ -23,14 +37,14 @@ import csv
 import json
 import sys
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 CNCDC_BASE = (
     "https://raw.githubusercontent.com/dailypartita/cn_cdc_dashboard/main/data/"
 )
 COVID_URL = CNCDC_BASE + "cncdc_surveillance_covid19.csv"
-SURV_ALL_URL = CNCDC_BASE + "cncdc_surveillance_all.csv"
+CNIC_URL = CNCDC_BASE + "cnic_influenza_weekly.csv"
 NOTIFIABLE_URL = CNCDC_BASE + "notifiable_all.csv"
 # Compiled national monthly history. Official syncs merge this file in
 # writeOutputs and never overwrite a (month, disease) the crawl returned.
@@ -38,7 +52,8 @@ BACKFILL_URL = CNCDC_BASE + "backfill/notifiable-flu-dengue.csv"
 LOCAL_DATA_DIR = Path("/data/ykx/hubverse_proj/00-cn_cdc_dashboard/data")
 DENGUE_DISEASE = "登革热"
 # Monthly notifiable influenza counts in the backfill extract. This hub's
-# flu target is weekly sentinel positivity, so those rows are ignored.
+# flu target is the CNIC weekly national laboratory positivity series, so
+# those rows are ignored.
 MONTHLY_FLU_DISEASE = "流行性感冒"
 
 TARGET_COVID = "wk inc covid prop ili"
@@ -46,7 +61,12 @@ TARGET_FLU = "wk inc flu prop ili"
 TARGET_DENGUE = "mo inc dengue cases"
 LOCATION = "CN"
 MIN_DATE_COVID = "2022-12-05"
+# First CNIC week with a national positivity value (Monday, 2009-W37).
+FLU_FIRST_MONDAY = "2009-09-07"
 MAX_ORACLE_LOOKBACK = 6
+# Contiguous lookback of 6 observed steps is horizons -5..0. A wider
+# calendar gap is not given a more negative horizon.
+ORACLE_MIN_HORIZON = -(MAX_ORACLE_LOOKBACK - 1)
 QUANTILE_LEVELS = [
     0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5,
     0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99,
@@ -108,6 +128,73 @@ def build_weekly_series(rows: list[dict[str, str]], pathogen: str,
         }
         for date in sorted(series.keys(), reverse=True)
     ]
+
+
+def observation_text(value: str) -> str:
+    """Keep the published numeric text, rejecting blank or non-finite values."""
+    text = value.strip()
+    number = float(text)
+    if number != number or number in (float("inf"), float("-inf")):
+        raise ValueError(f"non-finite positivity value: {value!r}")
+    if number < 0 or number > 100:
+        raise ValueError(f"positivity outside 0–100: {value!r}")
+    return text
+
+
+def build_cnic_flu_series(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], int]:
+    """National CNIC ILI-specimen positivity, keyed by the week-start Monday.
+
+    ``positivity_national`` is percentage points. ILI% columns are ignored.
+    A blank national value is a missing week and is not filled in. The Hub
+    ``target_end_date`` is CNIC ``reference_date`` (Monday). CNIC's own
+    ``target_end_date`` is the Sunday of that same ISO week.
+    """
+    if rows and "positivity_national" not in rows[0]:
+        raise RuntimeError(
+            "CNIC weekly file has no positivity_national column; "
+            "refusing to fall back to ILI% or another series"
+        )
+
+    series: dict[str, str] = {}
+    skipped = 0
+    for row in rows:
+        value = (row.get("positivity_national") or "").strip()
+        if not value:
+            skipped += 1
+            continue
+        monday = (row.get("reference_date") or "").strip()
+        sunday = (row.get("target_end_date") or "").strip()
+        if not monday or not sunday:
+            raise RuntimeError(
+                "CNIC row with national positivity is missing reference_date "
+                f"or target_end_date: {row!r}"
+            )
+        monday_dt = datetime.strptime(monday, "%Y-%m-%d")
+        sunday_dt = datetime.strptime(sunday, "%Y-%m-%d")
+        if monday_dt.weekday() != 0 or sunday_dt != monday_dt + timedelta(days=6):
+            raise RuntimeError(
+                "CNIC week is not Monday–Sunday "
+                f"({monday} .. {sunday}); refusing to remap the Hub date"
+            )
+        text = observation_text(value)
+        previous = series.get(monday)
+        if previous is not None and previous != text:
+            raise RuntimeError(
+                f"conflicting CNIC national positivity for {monday}: "
+                f"{previous} vs {text}"
+            )
+        series[monday] = text
+
+    flu_rows = [
+        {
+            "target_end_date": date,
+            "target": TARGET_FLU,
+            "location": LOCATION,
+            "observation": series[date],
+        }
+        for date in sorted(series.keys(), reverse=True)
+    ]
+    return flu_rows, skipped
 
 
 def is_dengue_row(row: dict[str, str]) -> bool:
@@ -230,6 +317,19 @@ def add_months(date: str, n: int) -> str:
     return f"{year:04d}-{month:02d}-01"
 
 
+def monday_sequence(start: str, end: str) -> list[str]:
+    """Every Monday from ``start`` through the last Monday on or before ``end``."""
+    current = datetime.strptime(start, "%Y-%m-%d")
+    last = datetime.strptime(end, "%Y-%m-%d")
+    if current.weekday() != 0:
+        raise ValueError(f"{start} is not a Monday")
+    dates = []
+    while current <= last:
+        dates.append(current.strftime("%Y-%m-%d"))
+        current += timedelta(days=7)
+    return dates
+
+
 def month_starts(first: str, last: str) -> list[str]:
     dates = []
     current = first
@@ -255,6 +355,11 @@ def build_oracle(time_series: list[dict[str, str]], target: str,
                 ref_dt = datetime.strptime(ref, "%Y-%m-%d")
                 target_dt = datetime.strptime(target_date, "%Y-%m-%d")
                 horizon = (target_dt - ref_dt).days // 7
+            # Across a missing week the previous observation can sit more
+            # than 5 steps back. Leave that week blank instead of emitting
+            # a horizon below the lookback window.
+            if horizon < ORACLE_MIN_HORIZON:
+                continue
             oracle_rows.append(
                 {
                     "reference_date": ref,
@@ -263,7 +368,9 @@ def build_oracle(time_series: list[dict[str, str]], target: str,
                     "target_end_date": target_date,
                     "location": LOCATION,
                     "output_type": "quantile",
-                    "output_type_id": "0.5",
+                    # Quantile is not a distributional output type.
+                    # hubValidations requires this id to be blank (NA).
+                    "output_type_id": "",
                     "oracle_value": values[target_date],
                 }
             )
@@ -274,16 +381,19 @@ def build_oracle(time_series: list[dict[str, str]], target: str,
 def flu_target_metadata() -> dict[str, object]:
     return {
         "target_id": TARGET_FLU,
-        "target_name": "Influenza virus positivity rate among department "
-                       "influenza-like illness (ILI) cases",
+        "target_name": "CNIC national laboratory positivity rate of ILI specimens",
         "target_units": "proportion",
         "target_keys": {"target": TARGET_FLU},
-        "description": "This target represents the influenza virus positivity "
-                       "rate among department influenza-like illness (ILI) "
-                       "cases, as reported in China CDCs weekly National "
-                       "Sentinel Surveillance of Acute Respiratory Infectious "
-                       "Diseases, in the week ending on the target_end_date "
-                       "(i.e., [horizon] weeks after the reference_date).",
+        "description": "This target represents the national laboratory "
+                       "positivity rate of influenza-like illness (ILI) "
+                       "specimens tested in the national influenza "
+                       "surveillance network, as published in the China "
+                       "National Influenza Center (CNIC) weekly influenza "
+                       "surveillance report "
+                       "(https://ivdc.chinacdc.cn/cnic/zyzx/lgzb/), for the "
+                       "ISO week starting on the target_end_date (Monday; "
+                       "[horizon] weeks after the reference_date). Values "
+                       "are percentage points for the national series.",
         "target_type": "continuous",
         "is_step_ahead": True,
         "time_unit": "week",
@@ -337,7 +447,10 @@ def make_dengue_model_task() -> dict[str, object]:
         "task_ids": {
             "reference_date": {"required": None, "optional": reference_dates},
             "location": {"required": None, "optional": [LOCATION]},
-            "horizon": {"required": None, "optional": DENGUE_HORIZONS},
+            "horizon": {
+            "required": None,
+            "optional": list(range(ORACLE_MIN_HORIZON, max(DENGUE_HORIZONS) + 1)),
+        },
             "target_end_date": {
                 "required": None,
                 "optional": month_starts(first_end, last_end),
@@ -369,7 +482,8 @@ def merge_optional_dates(task_ids: dict[str, object], key: str,
 
 def update_tasks_json(weekly_dates: list[str],
                       monthly_dates: list[str],
-                      monthly_target_end_dates: list[str] | None = None) -> bool:
+                      monthly_target_end_dates: list[str] | None = None,
+                      flu_target_end_dates: list[str] | None = None) -> bool:
     tasks = json.loads(TASKS_PATH.read_text(encoding="utf-8"))
     rounds = tasks["rounds"]
     changed = False
@@ -382,9 +496,17 @@ def update_tasks_json(weekly_dates: list[str],
     if TARGET_FLU not in targets:
         targets.append(TARGET_FLU)
         changed = True
-    metadata_ids = {m["target_id"] for m in weekly_task["target_metadata"]}
-    if TARGET_FLU not in metadata_ids:
-        weekly_task["target_metadata"].append(flu_target_metadata())
+    desired_flu = flu_target_metadata()
+    metadata = weekly_task["target_metadata"]
+    flu_index = next(
+        (i for i, meta in enumerate(metadata) if meta.get("target_id") == TARGET_FLU),
+        None,
+    )
+    if flu_index is None:
+        metadata.append(desired_flu)
+        changed = True
+    elif metadata[flu_index] != desired_flu:
+        metadata[flu_index] = desired_flu
         changed = True
 
     # Single round holds all targets: dengue (monthly) is a separate
@@ -413,6 +535,40 @@ def update_tasks_json(weekly_dates: list[str],
         dengue_task["task_ids"], "target_end_date", monthly_target_end_dates
     ):
         changed = True
+    # Observed CNIC Mondays, including weeks before the old submission
+    # window, must be valid target_end_dates.
+    if flu_target_end_dates and merge_optional_dates(
+        weekly_task["task_ids"], "target_end_date", flu_target_end_dates
+    ):
+        changed = True
+    # Historical flu weeks are submission rounds. Fill every Monday from
+    # 2009-09-07 through the current end of the round list. The list is
+    # copied onto the dengue task below; dengue month-starts are not added
+    # here, and they are not added to the weekly target_end_date list.
+    ref_end = max(weekly_task["task_ids"]["reference_date"]["optional"])
+    if merge_optional_dates(
+        weekly_task["task_ids"],
+        "reference_date",
+        monday_sequence(FLU_FIRST_MONDAY, ref_end),
+    ):
+        changed = True
+    ted_end = max(weekly_task["task_ids"]["target_end_date"]["optional"])
+    if merge_optional_dates(
+        weekly_task["task_ids"],
+        "target_end_date",
+        monday_sequence(FLU_FIRST_MONDAY, ted_end),
+    ):
+        changed = True
+    # Oracle lookback uses horizons down to -5. Keep every integer from
+    # that floor through each task's current maximum.
+    for task in (weekly_task, dengue_task):
+        horizons = task["task_ids"]["horizon"]["optional"]
+        if merge_optional_dates(
+            task["task_ids"],
+            "horizon",
+            list(range(ORACLE_MIN_HORIZON, max(horizons) + 1)),
+        ):
+            changed = True
 
     # hubAdmin's validate_round_ids_consistent requires the round_id variable
     # task_id to be identical across model_tasks when round_id_from_variable
@@ -445,8 +601,8 @@ def update_hub_target_data(args: argparse.Namespace) -> dict[str, object]:
     """Regenerate Hub target-data (+ tasks.json dates) from cncdc CSVs."""
     covid_rows, covid_src = local_or_github(
         "cncdc_surveillance_covid19.csv", COVID_URL, args.csv, args.from_github)
-    surv_rows, surv_src = local_or_github(
-        "cncdc_surveillance_all.csv", SURV_ALL_URL, args.surv_csv, args.from_github)
+    cnic_rows, cnic_src = local_or_github(
+        "cnic_influenza_weekly.csv", CNIC_URL, args.cnic_csv, args.from_github)
     notifiable_rows, notifiable_src = local_or_github(
         "notifiable_all.csv", NOTIFIABLE_URL, args.notifiable_csv, args.from_github)
     backfill_rows, backfill_src = local_or_github(
@@ -455,8 +611,7 @@ def update_hub_target_data(args: argparse.Namespace) -> dict[str, object]:
 
     covid_series = build_weekly_series(
         covid_rows, "新型冠状病毒", TARGET_COVID, MIN_DATE_COVID)
-    flu_series = build_weekly_series(
-        surv_rows, "流感病毒", TARGET_FLU, None)
+    flu_series, flu_skipped = build_cnic_flu_series(cnic_rows)
     notifiable_rows, dengue_backfill_added = merge_dengue_backfill(
         notifiable_rows, backfill_rows)
     dengue_series = build_dengue_series(notifiable_rows)
@@ -483,6 +638,37 @@ def update_hub_target_data(args: argparse.Namespace) -> dict[str, object]:
         time_series,
         ["target_end_date", "target", "location", "observation"],
     )
+    # COVID weeks extend the shared submission rounds. Monday rounds from
+    # the first CNIC week through the current end of that list are filled
+    # in update_tasks_json.
+    weekly_dates = sorted({row["target_end_date"] for row in covid_series})
+    flu_dates = sorted({row["target_end_date"] for row in flu_series})
+    monthly_dates = sorted({row["target_end_date"] for row in dengue_series})
+    # Months before the configured dengue submission window are observed
+    # history, not new forecast rounds. They are valid target_end_dates
+    # (see monthly_target_end_dates) but must not be merged into
+    # reference_date, which is unioned across the weekly task as well.
+    task_monthly_dates = [
+        date for date in monthly_dates if date >= DENGUE_FIRST_REFERENCE
+    ]
+    tasks_changed = update_tasks_json(
+        weekly_dates,
+        task_monthly_dates,
+        monthly_target_end_dates=monthly_dates,
+        flu_target_end_dates=flu_dates,
+    )
+    # Dengue history before the submission window stays in the time series.
+    # Those months are not weekly rounds, so oracle rows keyed by them are
+    # omitted. Flu weeks inside a gap can sit more than 5 steps back; those
+    # horizons are omitted in build_oracle rather than filled in.
+    allowed_refs = set(
+        json.loads(TASKS_PATH.read_text(encoding="utf-8"))["rounds"][0][
+            "model_tasks"
+        ][0]["task_ids"]["reference_date"]["optional"]
+    )
+    oracle_before = len(oracle)
+    oracle = [row for row in oracle if row["reference_date"] in allowed_refs]
+    oracle_dropped = oracle_before - len(oracle)
     write_csv(
         ORACLE_PATH,
         oracle,
@@ -497,21 +683,6 @@ def update_hub_target_data(args: argparse.Namespace) -> dict[str, object]:
             "oracle_value",
         ],
     )
-    weekly_dates = sorted(
-        {row["target_end_date"] for row in covid_series + flu_series})
-    monthly_dates = sorted({row["target_end_date"] for row in dengue_series})
-    # Months before the configured dengue submission window are observed
-    # history, not new forecast rounds. They are valid target_end_dates
-    # (see monthly_target_end_dates) but must not be merged into
-    # reference_date, which is unioned across the weekly task as well.
-    task_monthly_dates = [
-        date for date in monthly_dates if date >= DENGUE_FIRST_REFERENCE
-    ]
-    tasks_changed = update_tasks_json(
-        weekly_dates,
-        task_monthly_dates,
-        monthly_target_end_dates=monthly_dates,
-    )
 
     def span(series: list[dict[str, str]]) -> str:
         return (f"{series[-1]['target_end_date']} .. "
@@ -523,9 +694,11 @@ def update_hub_target_data(args: argparse.Namespace) -> dict[str, object]:
         "dengue": span(dengue_series),
         "dengue_backfill_added": dengue_backfill_added,
         "ignored_monthly_flu": ignored_monthly_flu,
+        "flu_skipped_missing_national": flu_skipped,
         "oracle_rows": len(oracle),
+        "oracle_rows_dropped_unconfigured_round": oracle_dropped,
         "tasks_changed": tasks_changed,
-        "sources": [covid_src, surv_src, notifiable_src, backfill_src],
+        "sources": [covid_src, cnic_src, notifiable_src, backfill_src],
     }
 
 
@@ -538,10 +711,10 @@ def main() -> int:
         help="Local cncdc_surveillance_covid19.csv (default: local path if present, else GitHub)",
     )
     parser.add_argument(
-        "--surv-csv",
+        "--cnic-csv",
         type=Path,
         default=None,
-        help="Local cncdc_surveillance_all.csv (default: local path if present, else GitHub)",
+        help="Local cnic_influenza_weekly.csv (default: local path if present, else GitHub)",
     )
     parser.add_argument(
         "--notifiable-csv",
@@ -570,7 +743,11 @@ def main() -> int:
     print(f"  dengue: {stats['dengue']}")
     print(f"  dengue backfill months added: {stats['dengue_backfill_added']}")
     print(f"  monthly flu backfill rows ignored: {stats['ignored_monthly_flu']}")
+    print("  CNIC weeks skipped (no national positivity): "
+          f"{stats['flu_skipped_missing_national']}")
     print(f"Updated {ORACLE_PATH.name}: {stats['oracle_rows']} rows")
+    print("  oracle rows omitted (reference_date is not a round): "
+          f"{stats['oracle_rows_dropped_unconfigured_round']}")
     print(f"Updated tasks.json: {'yes' if stats['tasks_changed'] else 'no'}")
     for src in stats["sources"]:
         print(f"Source: {src}")

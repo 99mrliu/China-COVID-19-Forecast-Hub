@@ -6,11 +6,11 @@
 
 </div>
 
-Collaborative forecasting hub built on the [Hubverse](https://hubverse.io/) framework. Collects, validates, and archives probabilistic forecasts of SARS-CoV-2 and influenza positivity rates among influenza-like illness (ILI) cases from China's national sentinel surveillance network, plus monthly reported dengue cases from national notifiable disease surveillance.
+Collaborative forecasting hub built on the [Hubverse](https://hubverse.io/) framework. Collects, validates, and archives probabilistic forecasts of the SARS-CoV-2 positivity rate among influenza-like illness (ILI) cases from China CDC sentinel surveillance, the national influenza laboratory positivity rate of ILI specimens from the China National Influenza Center (CNIC) weekly influenza surveillance report, and monthly reported dengue cases from national notifiable disease surveillance.
 
 **Dashboard:** [dailypartita.github.io/China-Infectious-Disease-Forecast-Dashboard](https://dailypartita.github.io/China-Infectious-Disease-Forecast-Dashboard/)
 
-**Target data:** [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard) · **Observed coverage:** see `target-data/time-series.csv` (updated weekly by automated sync) · **Configured submission rounds:** weekly (Mondays) through 2027-10-25; monthly dengue through 2027-10-01
+**Target data:** [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard) · **Observed coverage:** see `target-data/time-series.csv` (updated weekly by automated sync) · **Configured submission rounds:** weekly Mondays from 2009-09-07 through 2027-10-25; monthly dengue from 2024-01-01 through 2027-10-01
 
 ## Features
 
@@ -20,16 +20,18 @@ All targets share a single dynamic round (round ID = `reference_date`) and are d
 
 **Weekly respiratory targets**
 
-- **Targets:** `wk inc covid prop ili`, `wk inc flu prop ili` — weekly SARS-CoV-2 / influenza virus positivity rates among ILI cases
+- **Targets:**
+  - `wk inc covid prop ili` — weekly SARS-CoV-2 nucleic-acid positivity rate among outpatient ILI cases, from China CDC's National Sentinel Surveillance of Acute Respiratory Infectious Diseases
+  - `wk inc flu prop ili` — weekly national laboratory positivity rate of ILI specimens in the national influenza surveillance network, from the China National Influenza Center (CNIC) weekly influenza surveillance report ([source](https://ivdc.chinacdc.cn/cnic/zyzx/lgzb/))
 - **Location:** `CN` (national)
-- **Output:** 23-quantile probabilistic forecasts (horizons -1 to 6 weeks, reference dates on Mondays; teams may submit any subset — the full range is recommended for comparability, but not all horizons are required for validation)
+- **Output:** 23-quantile probabilistic forecasts (horizons -5 to 6 weeks; -1 to 6 is the forecast range, and reference dates are Mondays from 2009-09-07; teams may submit any subset — the forecast range is recommended for comparability, but not all horizons are required for validation)
 - **Units:** Percentage points (e.g., `13.5` = 13.5%), not proportions
 
 **Monthly dengue target**
 
 - **Target:** `mo inc dengue cases` — monthly reported dengue cases from notifiable disease surveillance
 - **Location:** `CN` (national)
-- **Output:** 23-quantile probabilistic forecasts (horizons -1 to 3 months; reference dates are the 1st of each month)
+- **Output:** 23-quantile probabilistic forecasts (horizons -5 to 3 months; -1 to 3 is the forecast range; reference dates are the 1st of each month from 2024-01-01)
 - **Units:** Case counts (integers)
 
 ### Submission
@@ -56,12 +58,13 @@ See the [Dashboard Evaluation page](https://dailypartita.github.io/China-Infecti
 
 | Step | Schedule |
 |------|----------|
-| CDC sentinel report | Weekly (typically Wednesday) |
+| CDC sentinel report (COVID) | Weekly (typically Wednesday) |
+| CNIC influenza surveillance report | Weekly |
 | Target data sync | From [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard) via `target-data/update_from_cncdc.py` (automated: `sync-target-data.yaml`) |
 | Forecast submission deadline | Wednesday 23:59 Beijing time |
 | Dashboard data refresh | Thursday 17:33 UTC (automated) |
 
-Target data from [China CDC sentinel surveillance](https://www.chinacdc.cn/jksj/jksj04_14275/) (weekly respiratory pathogens) and [China CDC notifiable disease reports](https://www.chinacdc.cn/jksj/jksj01/) (monthly dengue). Structured data source: [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard).
+Target data: COVID from [China CDC sentinel surveillance](https://www.chinacdc.cn/jksj/jksj04_14275/) (weekly outpatient ILI nucleic-acid positivity), influenza from the [China National Influenza Center weekly influenza surveillance report](https://ivdc.chinacdc.cn/cnic/zyzx/lgzb/) (national laboratory positivity of ILI specimens), and dengue from [China CDC notifiable disease reports](https://www.chinacdc.cn/jksj/jksj01/). Structured data source: [cn_cdc_dashboard](https://github.com/dailypartita/cn_cdc_dashboard).
 
 ## Repository Structure
 
