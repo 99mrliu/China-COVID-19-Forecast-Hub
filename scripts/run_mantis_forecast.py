@@ -103,6 +103,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output", required=True, help="Output Hub CSV path")
     p.add_argument("--summary", default=None, help="Optional run-summary JSON path")
     p.add_argument("--mode", choices=["mantis", "dummy"], default="mantis")
+    p.add_argument("--as-of-date", default=None,
+                   help="Backtest only: pretend data ends on this date "
+                        "(YYYY-MM-DD, a Monday in the series). The input "
+                        "window is then the last 112 weeks up to that date, "
+                        "so no future information leaks in. Omit for a live run.")
     return p.parse_args()
 
 
@@ -169,6 +174,15 @@ def main() -> int:
         raise ValueError(f"reference_date {ref} is not a Monday")
 
     series_df = load_covid_series(args.target_data)
+    if args.as_of_date:
+        cutoff = date.fromisoformat(args.as_of_date)
+        series_df = series_df[series_df["target_end_date"].dt.date <= cutoff]
+        if len(series_df) < INPUT_WINDOW:
+            raise ValueError(
+                f"Only {len(series_df)} weeks up to {cutoff}, "
+                f"Mantis needs {INPUT_WINDOW}")
+        print(f"Backtest as-of {cutoff}: series truncated to "
+              f"{len(series_df)} weeks (no future leakage)")
     last112 = series_df.tail(INPUT_WINDOW)
     values = last112["observation"].to_numpy(dtype=float)
     last_date: date = last112["target_end_date"].dt.date.iloc[-1]
