@@ -1,0 +1,129 @@
+# Mantis weekly COVID-positivity forecast -- TEST VERSION
+#
+# Status: MANUAL-ONLY test. Do NOT enable the schedule below until:
+#   1. the fork's main has been synced to upstream,
+#   2. this workflow has been run once by hand (workflow_dispatch)
+#      and its CSV has been checked by the user,
+#   3. the GZNL-Mantis model metadata has been registered upstream.
+#
+# What it does NOT do (by design, for now):
+#   - no scheduled runs (the `schedule:` block is commented out)
+#   - no push to any branch, no pull request to upstream,
+#     no commit of the forecast CSV. The CSV is only uploaded
+#     as a workflow artifact for the user to download and review.
+#   - no change to the upstream repo dailypartita/China-Infectious-
+#     Disease-Forecast-Hub.
+#
+# How to run it by hand (after the workflow file is on a branch):
+#   Actions -> "Mantis forecast (manual test only)" -> Run workflow
+#   -> reference_date: next Monday, e.g. 2026-11-16
+#   -> download the `mantis-forecast-<date>` artifact, run
+#      scripts/validate_hub_csv.py on the CSV, check the medians.
+#
+# Later, to go weekly (only after the user says so):
+#   1. uncomment the `schedule:` block (Wednesdays, before the
+#      23:59 Beijing deadline; cron is UTC, so 10:00 UTC = 18:00 CST),
+#   2. merge this file to the fork's `main` (scheduled workflows
+#      only run from the default branch),
+#   3. add a step that commits the CSV to a dated branch and opens
+#      a PR to upstream with peter-evans/create-pull-request or
+#      `gh pr create` (needs Workflow permissions: Read and write).
+#
+name: Mantis forecast (manual test only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      reference_date:
+        description: "Round reference_date (a Monday, YYYY-MM-DD)"
+        required: true
+        default: "2026-11-16"
+  # schedule:  # <-- KEEP COMMENTED OUT until the user approves weekly runs
+  #   - cron: "0 10 * * 3"  # Wednesdays 10:00 UTC = 18:00 Beijing
+
+permissions:
+  contents: read  # test version: read-only, no push / no PR
+
+jobs:
+  forecast:
+    runs-on: ubuntu-24.04  # 4 vCPU, 16 GB RAM, 14 GB SSD
+    timeout-minutes: 120
+    steps:
+      - name: Check out this fork
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: Cache Mantis weights
+        id: cache-weights
+        uses: actions/cache@v4
+        with:
+          path: models
+          # If the cache misses (first run, or evicted after 7 idle
+          # days), the next step downloads the weights again.
+          key: mantis-weights-v1-8w-nocov
+          restore-keys: |
+            mantis-weights-v1-
+
+      - name: Install torch (CPU only) + deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r scripts/requirements.txt
+
+      - name: Download Mantis weights (only on cache miss)
+        if: steps.cache-weights.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p models
+          wget -O models/mantis_8w_nocov.pt \
+            https://github.com/carsondudley1/Mantis/releases/download/mantis-v1.0/mantis_8w_nocov.pt
+          ls -lh models/
+
+      - name: Clone Mantis code (not vendored in the fork)
+        run: |
+          git clone --depth 1 https://github.com/carsondudley1/Mantis.git mantis
+          ls mantis/mantis/
+
+      - name: Fetch latest Hub target data from upstream
+        run: |
+          mkdir -p target-data
+          curl -sL -o target-data/time-series.csv \
+            https://raw.githubusercontent.com/dailypartita/China-Infectious-Disease-Forecast-Hub/main/target-data/time-series.csv
+          python3 -c "
+          import pandas as pd
+          df = pd.read_csv('target-data/time-series.csv', parse_dates=['target_end_date'])
+          g = df[df['target'] == 'wk inc covid prop ili'].sort_values('target_end_date')
+          print(f\"COVID weeks: {len(g)}, last: {g['target_end_date'].max().date()} = {g['observation'].iloc[-1]}%\")
+          "
+
+      - name: Run Mantis and convert to Hub format
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python3 scripts/run_mantis_forecast.py \
+            --target-data target-data/time-series.csv \
+            --reference-date "${{ inputs.reference_date }}" \
+            --model-dir models \
+            --mantis-dir mantis \
+            --output "model-output/GZNL-Mantis/${{ inputs.reference_date }}-GZNL-Mantis.csv" \
+            --summary "forecast-summary-${{ inputs.reference_date }}.json"
+          cat "forecast-summary-${{ inputs.reference_date }}.json"
+
+      - name: Validate Hub format locally
+        run: |
+          python3 scripts/validate_hub_csv.py \
+            "model-output/GZNL-Mantis/${{ inputs.reference_date }}-GZNL-Mantis.csv"
+
+      - name: Upload forecast as artifact (for review only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mantis-forecast-${{ inputs.reference_date }}
+          path: |
+            model-output/GZNL-Mantis/${{ inputs.reference_date }}-GZNL-Mantis.csv
+            forecast-summary-${{ inputs.reference_date }}.json
+          retention-days: 30
