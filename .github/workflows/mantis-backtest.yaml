@@ -1,0 +1,134 @@
+# Mantis backtest -- Aug 2026 summer peak (MANUAL-ONLY)
+#
+# Question: at the 2026 summer peak, could Mantis see the decline coming?
+# Each origin pretends the data ends 3 weeks before the reference_date
+# (the same lag as the live run: last observed 2026-10-26 vs ref 2026-11-16),
+# so no future information leaks in. Actuals are scored afterwards
+# with scripts/score_backtest.py (median MAE, WIS, 50%/90% coverage).
+#
+# Origins (reference_date / as-of / last observed value):
+#   2026-07-27 / 2026-07-06 / 11.9%  (still rising)
+#   2026-08-03 / 2026-07-13 / 16.3%  (still rising)
+#   2026-08-10 / 2026-07-20 / 20.3%  (near peak)
+#   2026-08-17 / 2026-07-27 / 22.3%  (peak week)
+#   2026-08-24 / 2026-08-03 / 21.1%  (just past peak)
+# Actuals after the peak: 22.3 -> 21.1 -> 21.2 -> 19.5 -> 15.8 -> 14.0
+# -> 12.5 -> 9.3 -> 7.2 -> 4.9 -> 3.4 -> 2.9 -> 1.9 -> 1.3
+#
+# A flat "last value" forecast scores MAE ~8.1 / mean WIS ~86 on the
+# 2026-08-24 origin (checked locally in dummy mode). Mantis has to
+# beat that, and its medians at horizon 2-3 have to turn down, for
+# the backtest to count as "saw the decline coming".
+#
+# Output is an artifact only -- no push, no PR, no schedule.
+name: Mantis backtest (Aug 2026 peak)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out this fork
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: Cache Mantis weights
+        id: cache-weights
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: mantis-weights-v1-8w-nocov
+          restore-keys: |
+            mantis-weights-v1-
+
+      - name: Install torch (CPU only) + deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r scripts/requirements.txt
+
+      - name: Download Mantis weights (only on cache miss)
+        if: steps.cache-weights.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p models
+          wget -O models/mantis_8w_nocov.pt \
+            https://github.com/carsondudley1/Mantis/releases/download/mantis-v1.0/mantis_8w_nocov.pt
+          ls -lh models/
+
+      - name: Clone Mantis code (not vendored in the fork)
+        run: |
+          git clone --depth 1 https://github.com/carsondudley1/Mantis.git mantis
+          ls mantis/mantis/
+
+      - name: Fetch latest Hub target data from upstream
+        run: |
+          mkdir -p target-data
+          curl -sL -o target-data/time-series.csv \
+            https://raw.githubusercontent.com/dailypartita/China-Infectious-Disease-Forecast-Hub/main/target-data/time-series.csv
+          python3 -c "
+          import pandas as pd
+          df = pd.read_csv('target-data/time-series.csv', parse_dates=['target_end_date'])
+          g = df[df['target'] == 'wk inc covid prop ili'].sort_values('target_end_date')
+          print(f\"COVID weeks: {len(g)}, last: {g['target_end_date'].max().date()} = {g['observation'].iloc[-1]}%\")
+          "
+
+      - name: Run backtest origins + score them
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          mkdir -p backtest
+          for spec in "2026-07-27 2026-07-06" "2026-08-03 2026-07-13" "2026-08-10 2026-07-20" "2026-08-17 2026-07-27" "2026-08-24 2026-08-03"; do
+            set -- $spec; REF=$1; ASOF=$2
+            echo "=== origin $REF (as-of $ASOF) ==="
+            python3 scripts/run_mantis_forecast.py \
+              --target-data target-data/time-series.csv \
+              --reference-date "$REF" --as-of-date "$ASOF" \
+              --model-dir models --mantis-dir mantis \
+              --output "backtest/${REF}-GZNL-Mantis.csv" \
+              --summary "backtest/${REF}-summary.json"
+            python3 scripts/score_backtest.py \
+              --forecast "backtest/${REF}-GZNL-Mantis.csv" \
+              --target-data target-data/time-series.csv \
+              --output "backtest/${REF}-score.json"
+          done
+
+      - name: Build summary table
+        run: |
+          python3 - << 'PY'
+          import json, glob
+          lines = ["# Mantis backtest -- Aug 2026 peak", "",
+                   "Each origin pretends data ends 3 weeks before its reference_date.",
+                   "Actuals after the peak: 22.3 (Jul 27) -> 21.1 -> 21.2 -> 19.5 -> 15.8 -> 14.0 -> 12.5 -> 9.3 -> 7.2 -> 4.9 -> 3.4 -> 2.9 -> 1.9 -> 1.3", "",
+                   "| origin (ref) | last obs | median h0 | median h2 | median h5 | MAE | mean WIS | 50% cov | 90% cov |",
+                   "|---|---|---|---|---|---|---|---|---|"]
+          for f in sorted(glob.glob("backtest/*-score.json")):
+              ref = f.split("/")[-1][:10]
+              s = json.load(open(f))
+              summ = json.load(open(f"backtest/{ref}-summary.json"))
+              p = s["pooled"] or {}
+              med = summ["median_by_horizon"]
+              lines.append(f"| {ref} | {summ['last_observed_value']}% | {med.get('0', '-')} | {med.get('2', '-')} | {med.get('5', '-')} | {p.get('mae_median', '-')} | {p.get('mean_wis', '-')} | {p.get('coverage_50', '-')} | {p.get('coverage_90', '-')} |")
+          lines += ["", "Flat last-value baseline on the 2026-08-24 origin: MAE 8.07, mean WIS 86.34 (dummy mode, local check).",
+                    "Did the median turn down at horizon 2-3? Compare median h2/h5 with last obs above."]
+          open("backtest/BACKTEST-SUMMARY.md", "w").write("\n".join(lines) + "\n")
+          print("\n".join(lines))
+          PY
+
+      - name: Upload backtest as artifact (for review only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mantis-backtest-aug2026
+          path: backtest/
+          retention-days: 30
