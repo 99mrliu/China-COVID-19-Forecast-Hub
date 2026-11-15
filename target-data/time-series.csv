@@ -1,4 +1,5 @@
 target_end_date,target,location,observation
+2026-11-02,wk inc covid prop ili,CN,0.8
 2026-10-26,wk inc covid prop ili,CN,1.3
 2026-10-19,wk inc covid prop ili,CN,1.9
 2026-10-12,wk inc covid prop ili,CN,2.9
@@ -1087,6 +1088,7 @@ target_end_date,target,location,observation
 2009-09-28,wk inc flu prop ili,CN,28.7
 2009-09-21,wk inc flu prop ili,CN,37.7
 2009-09-07,wk inc flu prop ili,CN,31.6
+2026-10-01,mo inc dengue cases,CN,431
 2026-09-01,mo inc dengue cases,CN,486
 2026-08-01,mo inc dengue cases,CN,836
 2026-07-01,mo inc dengue cases,CN,1120
