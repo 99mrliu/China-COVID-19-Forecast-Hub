@@ -1,9 +1,6 @@
-# DRAFT -- do NOT submit yet. For the user to review first.
-# Register the Mantis model with the Hub. This file goes to
-# model-metadata/GZNL-Mantis.yaml in a PR to upstream, and must be
-# merged by the Hub maintainer BEFORE any weekly forecast PR for
-# GZNL-Mantis can pass validation.
-# Fields follow the existing GZNL-NextWave.yaml template.
+# Register the Mantis model with the Hub. This file must be merged by
+# the Hub maintainer BEFORE any weekly forecast PR for GZNL-Mantis
+# can pass validation.
 team_name: "GZNL Group"
 team_abbr: "GZNL"
 model_name: "Mantis COVID Positivity Forecast"
