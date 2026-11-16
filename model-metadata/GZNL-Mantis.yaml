@@ -11,7 +11,7 @@ model_abbr: "Mantis"
 model_contributors:
   - name: "GZNL Group"
     affiliation: "GZNL Group"
-    email: "gznl@example.com"
+    email: "liu_hengshen@gzlab.ac.cn"
 license: "CC-BY-4.0"
 designated_model: true
 data_inputs: "中国疾控中心每周发布的《全国急性呼吸道传染病哨点监测情况》报告的门急诊流感样病例中的新型冠状病毒阳性率"
