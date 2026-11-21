@@ -1,6 +1,0 @@
-# Runtime deps for the Mantis forecast script.
-# torch is installed separately in the workflow from the CPU-only
-# index (https://download.pytorch.org/whl/cpu) -- do NOT put it here,
-# or pip will pull the much larger CUDA build.
-numpy
-pandas
